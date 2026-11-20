@@ -419,11 +419,14 @@ export default function App() {
     setTimeout(() => scrollToBottom(true), 50);
   }
 
-  async function ask(e) {
+  async function ask(e, overrideQuestion = null) {
     if (e && e.preventDefault) e.preventDefault();
-    if (!question.trim() || busy) return;
-    const q = question.trim();
-    setQuestion("");
+    const rawQ = overrideQuestion != null ? overrideQuestion : question;
+    if (!rawQ || !rawQ.trim() || busy) return;
+    const q = rawQ.trim();
+    if (overrideQuestion == null) {
+      setQuestion("");
+    }
 
     let activeConvId = conversation;
     if (!activeConvId) {
@@ -1329,6 +1332,7 @@ export default function App() {
                       item={item}
                       onFeedback={feedback}
                       onRegenerate={regenerate}
+                      onAskSuggestion={(sq) => ask(null, sq)}
                     />
                   ))}
 

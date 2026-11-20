@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import Markdown from "./Markdown";
 import { API_BASE_URL } from "./api";
-import { MessageSquare, User, Copy, RefreshCw, FileText, ChevronRight } from "./icons";
+import { MessageSquare, User, Copy, RefreshCw, FileText, ChevronRight, Sparkles, ArrowUp } from "./icons";
 
 export function Pager({ page, total, onChange, pageSize = 10 }) {
   const pages = Math.max(1, Math.ceil(total / pageSize));
@@ -97,7 +97,7 @@ export function RAGWorkflowProgress({ response }) {
   );
 }
 
-export function Answer({ item, onFeedback, onRegenerate }) {
+export function Answer({ item, onFeedback, onRegenerate, onAskSuggestion }) {
   const r = item.response || {};
   const [openSources, setOpenSources] = useState(false);
   const [openDebug, setOpenDebug] = useState(false);
@@ -186,6 +186,14 @@ export function Answer({ item, onFeedback, onRegenerate }) {
           </div>
 
           <div className="answer-content-wrap">
+            {/* Subtle Query Normalization Indicator if query was auto-corrected */}
+            {!isPending && r.correctedQuery && r.isCorrected && r.correctedQuery.toLowerCase() !== (item.question || "").toLowerCase() && (
+              <div className="query-interpreted-badge" title={Array.isArray(r.correctionNotes) ? r.correctionNotes.join("; ") : "Auto-corrected"}>
+                <Sparkles size={12} className="text-orange" />
+                <span>Interpreted as: <strong>"{r.correctedQuery}"</strong></span>
+              </div>
+            )}
+
             {isPending ? (
               <RAGWorkflowProgress response={r} />
             ) : isNoDocs ? (
@@ -384,6 +392,29 @@ export function Answer({ item, onFeedback, onRegenerate }) {
                 </button>
               </div>
             )} */}
+            {/* AI Suggested Follow-up Questions Agent */}
+            {!isPending && (r.suggestedQuestions?.length > 0 || r.suggested_questions?.length > 0) && (
+              <div className="suggested-questions-container">
+                <div className="suggested-questions-header">
+                  <Sparkles size={12} className="text-orange" />
+                  <span>Suggested Follow-ups:</span>
+                </div>
+                <div className="suggested-questions-list">
+                  {(r.suggestedQuestions || r.suggested_questions).map((sq, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      className="suggested-question-pill"
+                      onClick={() => onAskSuggestion && onAskSuggestion(sq)}
+                      title={`Ask: "${sq}"`}
+                    >
+                      <span>{sq}</span>
+                      <ArrowUp size={11} className="suggestion-arrow" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
