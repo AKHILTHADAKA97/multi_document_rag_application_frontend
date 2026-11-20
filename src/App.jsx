@@ -37,6 +37,8 @@ import {
   Shield,
   AlertCircle,
   Download,
+  Paperclip,
+  ImageIcon,
 } from "./icons";
 
 const GROQ_FREE_MODELS = [
@@ -83,7 +85,10 @@ export default function App() {
   const [selected, setSelected] = useState([]);
   const [question, setQuestion] = useState("");
   const [chat, setChat] = useState([]);
-  const [conversation, setConversation] = useState(null);
+  const [conversation, setConversation] = useState(
+    () => localStorage.getItem("atlas_conversation_id") || null
+  );
+  const [pendingAttachments, setPendingAttachments] = useState([]);
 
   const [history, setHistory] = useState({ items: [], total: 0 });
   const [hp, setHp] = useState(1);
@@ -122,16 +127,46 @@ export default function App() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [mobileDocsOpen, setMobileDocsOpen] = useState(false);
 
-  const chatEndRef = useRef(null);
+  const chatMessagesScrollRef = useRef(null);
+  const chatAttachmentInputRef = useRef(null);
   const fileInputRef = useRef(null);
   const rightFileInputRef = useRef(null);
   const modalReplaceInputRef = useRef(null);
 
-  useEffect(() => {
-    if (typeof chatEndRef.current?.scrollIntoView === "function") {
-      chatEndRef.current.scrollIntoView({ behavior: "smooth" });
+  const scrollToBottom = useCallback((smooth = true) => {
+    const el = chatMessagesScrollRef.current;
+    if (el) {
+      el.scrollTo({
+        top: el.scrollHeight + 1000,
+        behavior: smooth ? "smooth" : "auto",
+      });
+      requestAnimationFrame(() => {
+        if (chatMessagesScrollRef.current) {
+          chatMessagesScrollRef.current.scrollTop = chatMessagesScrollRef.current.scrollHeight;
+        }
+      });
     }
-  }, [chat, busy]);
+  }, []);
+
+  useEffect(() => {
+    scrollToBottom(true);
+  }, [chat, busy, scrollToBottom]);
+
+  // Restore conversation messages from backend on initial mount
+  useEffect(() => {
+    const savedConvId = localStorage.getItem("atlas_conversation_id");
+    if (savedConvId) {
+      setConversation(savedConvId);
+      api(`/conversations/${savedConvId}`)
+        .then((data) => {
+          if (data && Array.isArray(data.items) && data.items.length > 0) {
+            setChat(data.items);
+            setTimeout(() => scrollToBottom(false), 50);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [scrollToBottom]);
 
   useEffect(() => {
     if (notice) {
@@ -329,11 +364,76 @@ export default function App() {
     setUploadStatus("");
   }
 
+  async function handleChatAttachment(files) {
+    if (!files?.length || busy) return;
+    let activeConvId = conversation;
+    if (!activeConvId) {
+      activeConvId = crypto.randomUUID();
+      setConversation(activeConvId);
+      localStorage.setItem("atlas_conversation_id", activeConvId);
+    }
+    setBusy(true);
+    setError("");
+    for (const file of Array.from(files)) {
+      setUploadStatus(`Uploading: ${file.name}`);
+      const f = new FormData();
+      f.append("file", file);
+      const isImg = file.type.startsWith("image/") || /\.(png|jpg|jpeg|webp|gif)$/i.test(file.name);
+      const previewUrl = isImg ? URL.createObjectURL(file) : "";
+      try {
+        const res = await api(`/conversations/${activeConvId}/attachments`, {
+          method: "POST",
+          body: f,
+        });
+        const attObj = {
+          file_name: file.name,
+          file_size: file.size,
+          document_id: res.document_id,
+          isImage: isImg,
+          previewUrl: previewUrl,
+        };
+        if (res.document_id) {
+          setSelected((prev) => Array.from(new Set([...prev, res.document_id])));
+        }
+        setChat((prev) => [
+          ...prev,
+          {
+            id: crypto.randomUUID(),
+            question: `Attached: ${file.name}`,
+            attachments: [attObj],
+            response: {
+              status: "answered",
+              answer: `Uploaded and indexed **${file.name}** (${(file.size / 1024).toFixed(1)} KB). It is now ready in this conversation. What would you like to know about it?`,
+              sources: [],
+            },
+          },
+        ]);
+        setNotice(`Attachment "${file.name}" ready in this conversation.`);
+      } catch (err) {
+        setError(`Failed to attach ${file.name}: ${err.message}`);
+      }
+    }
+    setUploadStatus("");
+    setBusy(false);
+    await Promise.all([loadDocs(), refresh()]);
+    setTimeout(() => scrollToBottom(true), 50);
+  }
+
   async function ask(e) {
     if (e && e.preventDefault) e.preventDefault();
     if (!question.trim() || busy) return;
     const q = question.trim();
     setQuestion("");
+
+    let activeConvId = conversation;
+    if (!activeConvId) {
+      activeConvId = crypto.randomUUID();
+      setConversation(activeConvId);
+      localStorage.setItem("atlas_conversation_id", activeConvId);
+    }
+
+    const currentAttachments = [...pendingAttachments];
+    setPendingAttachments([]);
 
     // Show the question immediately on the right with a dynamic RAG pipeline placeholder on the left
     const tempId = crypto.randomUUID();
@@ -342,6 +442,7 @@ export default function App() {
       {
         id: tempId,
         question: q,
+        attachments: currentAttachments,
         response: {
           status: "pending",
           stage: "understanding_question",
@@ -353,8 +454,8 @@ export default function App() {
       },
     ]);
     setTimeout(() => {
-      chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, 50);
+      scrollToBottom(true);
+    }, 30);
 
     // Filter selected against available documents to avoid stale IDs
     const validSelected = selected.filter((id) =>
@@ -370,7 +471,7 @@ export default function App() {
             body: JSON.stringify({
               question: q,
               document_ids: validSelected,
-              conversation_id: conversation,
+              conversation_id: activeConvId,
             }),
           },
           {
@@ -410,13 +511,16 @@ export default function App() {
                   };
                 })
               );
-              chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+              scrollToBottom(false);
             },
             onComplete: (data) => {
-              setConversation(data.conversation_id);
+              const finalConvId = data.conversation_id || data.conversationId || activeConvId;
+              setConversation(finalConvId);
+              localStorage.setItem("atlas_conversation_id", finalConvId);
               setChat((prev) =>
                 prev.map((item) => (item.id === tempId ? { ...item, id: data.id, response: data } : item))
               );
+              scrollToBottom(true);
             },
             onError: (errData) => {
               setChat((prev) =>
@@ -433,6 +537,7 @@ export default function App() {
                     : item
                 )
               );
+              scrollToBottom(true);
             },
           }
         );
@@ -451,6 +556,7 @@ export default function App() {
               : item
           )
         );
+        scrollToBottom(true);
       }
       await refresh();
     });
@@ -527,12 +633,13 @@ export default function App() {
                   };
                 })
               );
-              chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+              scrollToBottom(false);
             },
             onComplete: (data) => {
               setChat((prev) =>
                 prev.map((c) => (c.id === item.id ? { ...c, response: data } : c))
               );
+              scrollToBottom(true);
             },
             onError: (errData) => {
               setChat((prev) =>
@@ -549,6 +656,7 @@ export default function App() {
                     : c
                 )
               );
+              scrollToBottom(true);
             },
           }
         );
@@ -567,6 +675,7 @@ export default function App() {
               : c
           )
         );
+        scrollToBottom(true);
       }
       await refresh();
     });
@@ -677,24 +786,52 @@ export default function App() {
     });
   }
 
-  function openConversation(h) {
-    setConversation(h.conversation_id || h.id);
-    let resp = h.response;
-    if (typeof resp === "string") {
-      try {
-        resp = JSON.parse(resp);
-      } catch {
-        resp = { status: "answered", answer: resp };
-      }
-    }
-    setChat([
-      {
-        id: h.id,
-        question: h.question,
-        response: resp || { status: "answered", answer: h.answer || "Conversation loaded." },
-      },
-    ]);
+  async function openConversation(h) {
+    const targetId = h.conversation_id || h.id;
+    if (!targetId) return;
+    setConversation(targetId);
+    localStorage.setItem("atlas_conversation_id", targetId);
     setTab("Chat");
+    setMobileSidebarOpen(false);
+    try {
+      const data = await api(`/conversations/${targetId}`);
+      if (data && Array.isArray(data.items) && data.items.length > 0) {
+        setChat(data.items);
+      } else {
+        let resp = h.response;
+        if (typeof resp === "string") {
+          try {
+            resp = JSON.parse(resp);
+          } catch {
+            resp = { status: "answered", answer: resp };
+          }
+        }
+        setChat([
+          {
+            id: h.id,
+            question: h.question,
+            response: resp || { status: "answered", answer: h.answer || "Conversation loaded." },
+          },
+        ]);
+      }
+    } catch {
+      let resp = h.response;
+      if (typeof resp === "string") {
+        try {
+          resp = JSON.parse(resp);
+        } catch {
+          resp = { status: "answered", answer: resp };
+        }
+      }
+      setChat([
+        {
+          id: h.id,
+          question: h.question,
+          response: resp || { status: "answered", answer: h.answer || "Conversation loaded." },
+        },
+      ]);
+    }
+    setTimeout(() => scrollToBottom(false), 50);
   }
 
   async function clearAllHistory() {
@@ -706,8 +843,10 @@ export default function App() {
       return;
     await run(async () => {
       await api("/history", { method: "DELETE" });
+      const newId = crypto.randomUUID();
       setChat([]);
-      setConversation(null);
+      setConversation(newId);
+      localStorage.setItem("atlas_conversation_id", newId);
       setHp(1);
       setHistory({ items: [], total: 0 });
       setNotice("All history cleared.");
@@ -716,10 +855,14 @@ export default function App() {
   }
 
   const startNewChat = () => {
+    const newId = crypto.randomUUID();
+    setConversation(newId);
+    localStorage.setItem("atlas_conversation_id", newId);
     setChat([]);
-    setConversation(null);
+    setPendingAttachments([]);
     setTab("Chat");
     setMobileSidebarOpen(false);
+    setNotice("Started a fresh conversation.");
   };
 
   const copyFullConversation = () => {
@@ -1161,7 +1304,11 @@ export default function App() {
                 </div>
 
                 {/* Chat Log Message Stream */}
-                <div className="chat-messages-scroll" aria-live="polite">
+                <div
+                  className="chat-messages-scroll"
+                  ref={chatMessagesScrollRef}
+                  aria-live="polite"
+                >
                   {!chat.length && (
                     <div className="chat-empty-state">
                       <div className="chat-empty-icon">
@@ -1197,12 +1344,55 @@ export default function App() {
                       </p>
                     </div>
                   )}
-                  <div ref={chatEndRef} />
                 </div>
 
                 {/* Bottom Input Composer */}
                 <div className="chat-composer-wrapper">
+                  {/* Pending Attachments Preview Chips */}
+                  {pendingAttachments.length > 0 && (
+                    <div className="composer-attachments-bar">
+                      {pendingAttachments.map((f, i) => (
+                        <div key={i} className="composer-attachment-tag">
+                          <Paperclip size={12} />
+                          <span>{f.name}</span>
+                          <button
+                            type="button"
+                            className="composer-attachment-remove"
+                            onClick={() =>
+                              setPendingAttachments((prev) =>
+                                prev.filter((_, idx) => idx !== i)
+                              )
+                            }
+                            title="Remove attachment"
+                            aria-label="Remove attachment"
+                          >
+                            <X size={12} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   <form className="chat-composer-pill" onSubmit={ask}>
+                    {/* Chat file attachment input */}
+                    <input
+                      type="file"
+                      ref={chatAttachmentInputRef}
+                      style={{ display: "none" }}
+                      multiple
+                      accept=".pdf,.docx,.txt,.md,.csv,.json,.png,.jpg,.jpeg,.webp,.gif"
+                      onChange={(e) => handleChatAttachment(e.target.files)}
+                    />
+                    <button
+                      type="button"
+                      className="chat-attach-btn"
+                      onClick={() => chatAttachmentInputRef.current?.click()}
+                      title="Attach documents or images"
+                      aria-label="Attach documents or images"
+                    >
+                      <Paperclip size={16} />
+                    </button>
+
                     <label className="sr-only" htmlFor="question">
                       Your question
                     </label>

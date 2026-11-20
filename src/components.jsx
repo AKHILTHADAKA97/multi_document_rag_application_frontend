@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import Markdown from "./Markdown";
+import { API_BASE_URL } from "./api";
 import { MessageSquare, User, Copy, RefreshCw, FileText, ChevronRight } from "./icons";
 
 export function Pager({ page, total, onChange, pageSize = 10 }) {
@@ -144,6 +145,31 @@ export function Answer({ item, onFeedback, onRegenerate }) {
 
   return (
     <article className="exchange">
+      {/* Attachments Row if attached */}
+      {item.attachments && item.attachments.length > 0 && (
+        <div className="message-attachments-container">
+          {item.attachments.map((att, idx) => (
+            <div key={idx} className="message-attachment-card">
+              {att.isImage || (att.file_name && /\.(png|jpg|jpeg|webp|gif)$/i.test(att.file_name)) ? (
+                <img
+                  src={att.previewUrl || `${API_BASE_URL}/api/documents/${att.document_id}/download`}
+                  alt={att.file_name}
+                  className="message-attachment-preview"
+                />
+              ) : (
+                <FileText size={18} className="text-orange" />
+              )}
+              <div className="message-attachment-meta">
+                <span className="message-attachment-name">{att.file_name}</span>
+                <span className="message-attachment-size">
+                  {att.file_size ? `${(att.file_size / 1024).toFixed(1)} KB` : "Attachment"}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* User Question Row - Right aligned */}
       <div className="question-row">
         <div className="question">{item.question}</div>
