@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { api, downloadJSON } from "./api";
+import { api, downloadJSON, API_BASE_URL } from "./api";
 import { Pager, Answer } from "./components";
 import WorkflowPipeline from "./WorkflowPipeline";
 import {
@@ -370,7 +370,7 @@ export default function App() {
       setNotice(`Downloading ${doc.name}...`);
       const token = sessionStorage.getItem("atlas-token");
       const headers = token ? { "X-App-Token": token } : {};
-      const res = await fetch(`/api/documents/${doc.id}/download`, { headers });
+      const res = await fetch(`${API_BASE_URL}/api/documents/${doc.id}/download`, { headers });
       if (!res.ok) throw new Error("Failed to download file from server");
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);

@@ -1,16 +1,25 @@
-const base = import.meta.env.VITE_API_URL || "";
+const API_BASE_URL = (
+  import.meta.env.VITE_API_BASE_URL ||
+  import.meta.env.VITE_API_URL ||
+  ""
+).replace(/\/+$/, "");
+
+export { API_BASE_URL };
+
 export async function api(path, options = {}) {
   const headers = { ...options.headers };
   const token = sessionStorage.getItem("atlas-token");
   if (token) headers["X-App-Token"] = token;
   if (options.body && !(options.body instanceof FormData))
     headers["Content-Type"] = "application/json";
+
+  const url = `${API_BASE_URL}/api${path}`;
   let response;
   try {
-    response = await fetch(base + "/api" + path, { ...options, headers });
-  } catch {
+    response = await fetch(url, { ...options, headers });
+  } catch (err) {
     throw new Error(
-      "Cannot connect to the backend. Start FastAPI on port 8000 and check the API URL.",
+      "Cannot connect to the backend server. Please verify the backend is running and reachable.",
     );
   }
   let data;
