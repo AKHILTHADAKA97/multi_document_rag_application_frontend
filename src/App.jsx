@@ -238,6 +238,24 @@ export default function App() {
     if (!question.trim() || busy) return;
     const q = question.trim();
     setQuestion("");
+
+    // Show the question immediately on the right with a pending assistant placeholder on the left
+    const tempId = crypto.randomUUID();
+    setChat((prev) => [
+      ...prev,
+      {
+        id: tempId,
+        question: q,
+        response: {
+          status: "pending",
+          answer: "",
+        },
+      },
+    ]);
+    setTimeout(() => {
+      chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, 50);
+
     await run(async () => {
       try {
         const r = await api("/chat", {
@@ -249,20 +267,24 @@ export default function App() {
           }),
         });
         setConversation(r.conversation_id);
-        setChat((x) => [...x, { id: r.id, question: q, response: r }]);
-      } catch (e) {
-        setChat((x) => [
-          ...x,
-          {
-            id: crypto.randomUUID(),
-            question: q,
-            response: {
-              status: "error",
-              code: e.code || (e.message?.toLowerCase().includes("no processed files") ? "NO_DOCUMENTS" : "ERROR"),
-              answer: e.message || "The AI service encountered an error. Please check uploaded files and try again.",
-            },
-          },
-        ]);
+        setChat((prev) =>
+          prev.map((item) => (item.id === tempId ? { ...item, id: r.id, response: r } : item))
+        );
+      } catch (err) {
+        setChat((prev) =>
+          prev.map((item) =>
+            item.id === tempId
+              ? {
+                  ...item,
+                  response: {
+                    status: "error",
+                    code: err.code || (err.message?.toLowerCase().includes("no processed files") ? "NO_DOCUMENTS" : "ERROR"),
+                    answer: err.message || "The AI service encountered an error. Please check uploaded files and try again.",
+                  },
+                }
+              : item
+          )
+        );
       }
       await refresh();
     });
@@ -270,6 +292,11 @@ export default function App() {
 
   async function regenerate(item) {
     if (!item?.question || busy) return;
+    setChat((prev) =>
+      prev.map((c) =>
+        c.id === item.id ? { ...c, response: { status: "pending", answer: "" } } : c
+      )
+    );
     await run(async () => {
       try {
         const r = await api("/chat", {
@@ -280,23 +307,23 @@ export default function App() {
             conversation_id: conversation,
           }),
         });
-        setChat((x) =>
-          x.map((c) => (c.id === item.id ? { ...c, response: r } : c)),
+        setChat((prev) =>
+          prev.map((c) => (c.id === item.id ? { ...c, response: r } : c))
         );
-      } catch (e) {
-        setChat((x) =>
-          x.map((c) =>
+      } catch (err) {
+        setChat((prev) =>
+          prev.map((c) =>
             c.id === item.id
               ? {
                   ...c,
                   response: {
                     status: "error",
-                    code: e.code || "ERROR",
-                    answer: e.message || "The AI service encountered an error. Please try again.",
+                    code: err.code || "ERROR",
+                    answer: err.message || "The AI service encountered an error. Please try again.",
                   },
                 }
-              : c,
-          ),
+              : c
+          )
         );
       }
       await refresh();
@@ -916,7 +943,7 @@ export default function App() {
                     />
                   ))}
 
-                  {busy && (
+                  {busy && uploadStatus && (
                     <div className="busy-indicator-row">
                       <div className="spinner-dots">
                         <span />
@@ -924,8 +951,7 @@ export default function App() {
                         <span />
                       </div>
                       <p>
-                        Composing grounded answer with Groq…
-                        {uploadStatus ? ` (${uploadStatus})` : ""}
+                        Uploading & processing document: {uploadStatus}…
                       </p>
                     </div>
                   )}

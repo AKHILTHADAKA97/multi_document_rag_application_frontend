@@ -58,11 +58,13 @@ export function Answer({ item, onFeedback, onRegenerate }) {
     }
   };
 
+  const isPending = r.status === "pending";
   const isNoDocs =
-    r.code === "NO_DOCUMENTS" ||
-    (r.status === "error" && typeof r.answer === "string" && r.answer.toLowerCase().includes("no processed files"));
-  const isInsufficient = r.status === "not_found" || r.answerType === "not_found";
-  const isError = r.status === "error" && !isNoDocs;
+    !isPending &&
+    (r.code === "NO_DOCUMENTS" ||
+    (r.status === "error" && typeof r.answer === "string" && r.answer.toLowerCase().includes("no processed files")));
+  const isInsufficient = !isPending && (r.status === "not_found" || r.answerType === "not_found");
+  const isError = !isPending && r.status === "error" && !isNoDocs;
   const sourcesCount = r.sources?.length || 0;
 
   return (
@@ -76,14 +78,23 @@ export function Answer({ item, onFeedback, onRegenerate }) {
       </div>
 
       {/* Assistant Answer Row - Left aligned */}
-      <div className={"answer " + (isError ? "error-answer" : isNoDocs ? "nodocs-answer" : isInsufficient ? "insufficient-answer" : "")}>
+      <div className={"answer " + (isPending ? "pending-answer" : isError ? "error-answer" : isNoDocs ? "nodocs-answer" : isInsufficient ? "insufficient-answer" : "")}>
         <div className="assistant-bubble-row">
           <div className="assistant-avatar" title="AI Assistant">
             <MessageSquare size={16} />
           </div>
 
           <div className="answer-content-wrap">
-            {isNoDocs ? (
+            {isPending ? (
+              <div className="callout callout-pending">
+                <div className="spinner-dots inline-spinner">
+                  <span />
+                  <span />
+                  <span />
+                </div>
+                <p className="pending-text">Retrieving relevant excerpts and generating grounded answer…</p>
+              </div>
+            ) : isNoDocs ? (
               <div className="callout callout-warning">
                 <div className="callout-body">
                   <strong>No uploaded files</strong>
@@ -100,6 +111,15 @@ export function Answer({ item, onFeedback, onRegenerate }) {
               <div className="callout callout-error">
                 <div className="callout-body">
                   <p>{r.answer || "The AI service encountered an error. Please check uploaded files and try again."}</p>
+                  {onRegenerate && (
+                    <button
+                      type="button"
+                      className="retry-btn"
+                      onClick={() => onRegenerate(item)}
+                    >
+                      <RefreshCw size={12} /> Retry
+                    </button>
+                  )}
                 </div>
               </div>
             ) : (
@@ -109,47 +129,49 @@ export function Answer({ item, onFeedback, onRegenerate }) {
             )}
 
             {/* Quick Actions Bar */}
-            <div className="answer-actions-bar">
-              <button type="button" className="action-btn" onClick={handleCopy} title="Copy response">
-                <Copy size={13} />
-                {copied ? "Copied!" : "Copy"}
-              </button>
-
-              {onRegenerate && (
-                <button
-                  type="button"
-                  className="action-btn"
-                  onClick={() => onRegenerate(item)}
-                  title="Regenerate answer"
-                >
-                  <RefreshCw size={13} />
-                  Regenerate
+            {!isPending && (
+              <div className="answer-actions-bar">
+                <button type="button" className="action-btn" onClick={handleCopy} title="Copy response">
+                  <Copy size={13} />
+                  {copied ? "Copied!" : "Copy"}
                 </button>
-              )}
 
-              {sourcesCount > 0 && (
-                <button
-                  type="button"
-                  className={"action-btn " + (openSources ? "active" : "")}
-                  onClick={() => setOpenSources(!openSources)}
-                  title="Toggle Sources"
-                >
-                  <FileText size={13} />
-                  Sources ({sourcesCount}) {openSources ? "∧" : "∨"}
-                </button>
-              )}
+                {onRegenerate && (
+                  <button
+                    type="button"
+                    className="action-btn"
+                    onClick={() => onRegenerate(item)}
+                    title="Regenerate answer"
+                  >
+                    <RefreshCw size={13} />
+                    Regenerate
+                  </button>
+                )}
 
-              {(r.retrieval || r.usage || r.latency_ms || r.checks || r.sources?.some((s) => s.relevanceScore != null || s.bm25 != null || s.id)) && (
-                <button
-                  type="button"
-                  className={"action-btn " + (openDebug ? "active" : "")}
-                  onClick={() => setOpenDebug(!openDebug)}
-                  title="Toggle Diagnostics"
-                >
-                  <span className="mono-icon">&gt;_</span> Diagnostics {openDebug ? "∧" : "∨"}
-                </button>
-              )}
-            </div>
+                {sourcesCount > 0 && (
+                  <button
+                    type="button"
+                    className={"action-btn " + (openSources ? "active" : "")}
+                    onClick={() => setOpenSources(!openSources)}
+                    title="Toggle Sources"
+                  >
+                    <FileText size={13} />
+                    Sources ({sourcesCount}) {openSources ? "∧" : "∨"}
+                  </button>
+                )}
+
+                {(r.retrieval || r.usage || r.latency_ms || r.timings || r.checks || r.sources?.some((s) => s.relevanceScore != null || s.bm25 != null || s.id)) && (
+                  <button
+                    type="button"
+                    className={"action-btn " + (openDebug ? "active" : "")}
+                    onClick={() => setOpenDebug(!openDebug)}
+                    title="Toggle Diagnostics"
+                  >
+                    <span className="mono-icon">&gt;_</span> Diagnostics {openDebug ? "∧" : "∨"}
+                  </button>
+                )}
+              </div>
+            )}
 
             {/* Expandable Sources Details */}
             {sourcesCount > 0 && (
@@ -223,6 +245,9 @@ export function Answer({ item, onFeedback, onRegenerate }) {
                     {r.latency_ms != null && (
                       <div className="debug-line">
                         <strong>Latency:</strong> {r.latency_ms} ms
+                        {r.timings && (
+                          <span> · Retrieval: {r.timings.retrieval_ms} ms · Model: {r.timings.generation_ms} ms</span>
+                        )}
                       </div>
                     )}
                     {r.checks && (
