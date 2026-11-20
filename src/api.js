@@ -19,24 +19,58 @@ export async function api(path, options = {}) {
     response = await fetch(url, { ...options, headers });
   } catch (err) {
     throw new Error(
-      "Cannot connect to the backend server. Please verify the backend is running and reachable.",
+      "Cannot connect to the backend server. If hosted on Render free tier, the instance may be waking up from cold sleep (takes ~45s). Please wait a moment and retry.",
     );
   }
   let data;
   try {
     data = await response.json();
   } catch {
+    if (response.status === 502 || response.status === 503) {
+      throw new Error(
+        `Backend service unavailable (${response.status} Bad Gateway). The application may be starting up or restarting on Render.`,
+      );
+    }
     throw new Error(
-      "The backend returned an unreadable response. Check the server or reverse proxy.",
+      `The backend returned an unreadable response (HTTP ${response.status}). Check server logs.`,
     );
   }
   if (!response.ok) {
-    const err = new Error(data.error?.message || "The request failed. Please retry.");
-    err.code = data.error?.code || "ERROR";
+    const message =
+      data.error?.message ||
+      data.answer ||
+      data.message ||
+      (response.status === 401
+        ? "Authentication failed (401). Please enter a valid workspace token."
+        : response.status === 429
+        ? "Rate limit reached. Please wait a moment and try again."
+        : `Request failed with status ${response.status}.`);
+    const err = new Error(message);
+    err.code = data.error?.code || (response.status === 401 ? "UNAUTHORIZED" : "ERROR");
     err.status = response.status;
     throw err;
   }
   return data;
+}
+
+export async function checkBackendConnection() {
+  const t0 = performance.now();
+  try {
+    const res = await fetch(`${API_BASE_URL}/health/live`, { cache: "no-store" });
+    const ms = Math.round(performance.now() - t0);
+    if (res.ok) {
+      return { connected: true, latency: ms, status: "active", message: `Connected (${ms} ms)` };
+    }
+    return { connected: false, latency: ms, status: "error", message: `HTTP ${res.status}` };
+  } catch (err) {
+    const ms = Math.round(performance.now() - t0);
+    return {
+      connected: false,
+      latency: ms,
+      status: "unreachable",
+      message: "Backend unreachable. Render free tier may be waking up from cold sleep (~45s).",
+    };
+  }
 }
 
 export async function apiStream(path, options = {}, callbacks = {}) {

@@ -4813,3 +4813,356 @@ td {
   border-color: #059669;
   box-shadow: 0 0 8px rgba(16, 185, 129, 0.7);
 }
+
+/* 
+==========================================================================
+   SYSTEM HEALTH DIAGNOSTICS & DASHBOARD (STRICT 10px BORDER RADIUS)
+========================================================================== */
+
+.settings-header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.settings-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.test-connections-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: #f97316;
+  color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 3px rgba(249, 115, 22, 0.25);
+}
+
+.test-connections-btn:hover:not(:disabled) {
+  background: #ea580c;
+  transform: translateY(-1px);
+}
+
+.test-connections-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.refresh-diag-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #ffffff;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.refresh-diag-btn:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.kpi-metrics-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.kpi-card {
+  background: #ffffff;
+  border: 1px solid var(--border-card);
+  border-radius: 10px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+}
+
+.kpi-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+
+.kpi-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.kpi-sub {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.diagnostics-section {
+  margin-bottom: 16px;
+}
+
+.health-services-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 640px) {
+  .health-services-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.health-service-item {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.health-service-item:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.health-service-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.health-service-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.health-service-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.health-service-icon.blue { background: #eff6ff; color: #2563eb; }
+.health-service-icon.orange { background: #fff7ed; color: #ea580c; }
+.health-service-icon.green { background: #f0fdf4; color: #16a34a; }
+.health-service-icon.purple { background: #faf5ff; color: #9333ea; }
+
+.service-name {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.service-sub {
+  font-size: 10.5px;
+  color: #64748b;
+  margin-top: 1px;
+}
+
+.service-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.service-status-pill.online {
+  background: #f0fdf4;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+
+.service-status-pill.error {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
+.service-status-pill.degraded,
+.service-status-pill.checking {
+  background: #fffbeb;
+  color: #b45309;
+  border: 1px solid #fde68a;
+}
+
+.service-status-pill.not_configured {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+}
+
+.micro-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 10px;
+}
+
+.micro-dot.green { background: #10b981; box-shadow: 0 0 6px #10b981; }
+.micro-dot.red { background: #ef4444; box-shadow: 0 0 6px #ef4444; }
+.micro-dot.amber { background: #f59e0b; box-shadow: 0 0 6px #f59e0b; }
+.micro-dot.slate { background: #94a3b8; }
+
+.health-service-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.service-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+}
+
+.service-meta-label {
+  color: #64748b;
+}
+
+.service-meta-val {
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.service-details-text {
+  font-size: 11px;
+  color: #64748b;
+  word-break: break-all;
+  line-height: 1.4;
+}
+
+.service-error-box {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 11px;
+  color: #991b1b;
+  line-height: 1.4;
+}
+
+.service-fix-box {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 11px;
+  color: #1e40af;
+  line-height: 1.4;
+}
+
+/* API Key Diagnostics Card */
+.api-key-diag-card {
+  margin-bottom: 16px;
+}
+
+.api-diag-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.api-diag-item {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.api-diag-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+.api-diag-val {
+  font-size: 12.5px;
+  color: #0f172a;
+  word-break: break-all;
+}
+
+.api-diag-code {
+  font-family: monospace;
+  font-size: 11px;
+  background: #f1f5f9;
+  padding: 2px 6px;
+  border-radius: 10px;
+  color: #0f172a;
+}
+
+.api-diag-secure-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: #166534;
+  font-weight: 600;
+}
+
+.table-action-btn.retry-btn {
+  background: #fff7ed;
+  color: #c2410c;
+  border: 1px solid #fed7aa;
+  border-radius: 10px;
+}
+
+.table-action-btn.retry-btn:hover {
+  background: #ffedd5;
+  color: #9a3412;
+}
+
+.right-doc-icon-btn.retry {
+  color: #ea580c;
+}
+
+.right-doc-icon-btn.retry:hover {
+  background: #fff7ed;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
