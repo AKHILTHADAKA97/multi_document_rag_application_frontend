@@ -21,6 +21,81 @@ export function Pager({ page, total, onChange, pageSize = 10 }) {
   );
 }
 
+export const RAG_STAGES = [
+  { id: "understanding_question", label: "Understanding Question", icon: "🧠" },
+  { id: "generating_embeddings", label: "Generating Embeddings", icon: "⚡" },
+  { id: "retrieving_documents", label: "Retrieving Documents", icon: "🔍" },
+  { id: "reranking_results", label: "Reranking Results", icon: "⚖️" },
+  { id: "building_context", label: "Building Context", icon: "📦" },
+  { id: "generating_answer", label: "Generating Answer", icon: "✍️" },
+  { id: "validating_response", label: "Validating Response", icon: "🛡️" },
+  { id: "finalizing_response", label: "Finalizing Response", icon: "✨" },
+];
+
+export function RAGWorkflowProgress({ response }) {
+  const currentStageId = response.stage || "understanding_question";
+  const stageLabel = response.stageLabel || "Understanding Question";
+  const stageDetail = response.stageDetail || "Analyzing question intent and key search terms...";
+  const stagesDone = response.stagesDone || [];
+  const currentIdx = RAG_STAGES.findIndex((s) => s.id === currentStageId);
+  const activeIdx = currentIdx >= 0 ? currentIdx : 0;
+  const currentMeta = RAG_STAGES[activeIdx] || RAG_STAGES[0];
+
+  return (
+    <div className="rag-workflow-container">
+      {/* Top Banner showing Active Stage & Subtle Animated Spinner */}
+      <div className="rag-active-stage-card">
+        <div className="rag-stage-left">
+          <div className="rag-stage-icon-wrap">
+            <span className="rag-stage-emoji">{currentMeta.icon}</span>
+            <div className="rag-active-spinner" />
+          </div>
+          <div className="rag-stage-text-group">
+            <div className="rag-stage-heading-row">
+              <span className="rag-stage-main-title">{stageLabel}</span>
+              <span className="rag-stage-step-pill">Stage {activeIdx + 1} of {RAG_STAGES.length}</span>
+            </div>
+            {stageDetail && <p className="rag-stage-detail-text">{stageDetail}</p>}
+          </div>
+        </div>
+      </div>
+
+      {/* Compact Responsive Stage Sequence Track */}
+      <div className="rag-stages-track">
+        {RAG_STAGES.map((st, idx) => {
+          const isDone = stagesDone.includes(st.id) || idx < activeIdx;
+          const isActive = st.id === currentStageId || idx === activeIdx;
+          return (
+            <div
+              key={st.id}
+              className={`rag-track-item ${isDone ? "stage-done" : isActive ? "stage-active" : "stage-pending"}`}
+              title={`${idx + 1}. ${st.label}`}
+            >
+              <div className="rag-track-indicator">
+                {isDone ? "✓" : idx + 1}
+              </div>
+              <span className="rag-track-label">{st.label}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Real-time Streaming Answer Text if tokens have arrived */}
+      {response.answer && (
+        <div className="rag-streaming-preview">
+          <div className="rag-streaming-badge">
+            <span className="rag-live-dot" /> Streaming live answer
+          </div>
+          <div className="markdown-answer-body">
+            <Markdown text={response.answer} />
+            <span className="streaming-cursor">▍</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Answer({ item, onFeedback, onRegenerate }) {
   const r = item.response || {};
   const [openSources, setOpenSources] = useState(false);
@@ -86,14 +161,7 @@ export function Answer({ item, onFeedback, onRegenerate }) {
 
           <div className="answer-content-wrap">
             {isPending ? (
-              <div className="callout callout-pending">
-                <div className="spinner-dots inline-spinner">
-                  <span />
-                  <span />
-                  <span />
-                </div>
-                <p className="pending-text">Retrieving relevant excerpts and generating grounded answer…</p>
-              </div>
+              <RAGWorkflowProgress response={r} />
             ) : isNoDocs ? (
               <div className="callout callout-warning">
                 <div className="callout-body">
@@ -246,8 +314,14 @@ export function Answer({ item, onFeedback, onRegenerate }) {
                       <div className="debug-line">
                         <strong>Latency:</strong> {r.latency_ms} ms
                         {r.timings && (
-                          <span> · Retrieval: {r.timings.retrieval_ms} ms · Model: {r.timings.generation_ms} ms</span>
+                          <span>
+                            {" "}· Retrieval: {r.timings.retrieval_ms ?? 0} ms
+                            {r.timings.ttft_ms != null && ` · TTFT: ${r.timings.ttft_ms} ms`}
+                            {` · Model: ${r.timings.generation_ms ?? 0} ms · Total: ${r.timings.total_ms ?? r.latency_ms} ms`}
+                          </span>
                         )}
+                        {r.retrieval?.cache_hit ? " · Query Cache: HIT" : ""}
+                        {r.questionInfo?.intent && ` · Intent: ${r.questionInfo.intent}`}
                       </div>
                     )}
                     {r.checks && (

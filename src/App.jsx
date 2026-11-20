@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { api, downloadJSON, API_BASE_URL } from "./api";
+import { api, apiStream, downloadJSON, API_BASE_URL } from "./api";
 import { Pager, Answer } from "./components";
 import WorkflowPipeline from "./WorkflowPipeline";
 import {
@@ -247,7 +247,7 @@ export default function App() {
     const q = question.trim();
     setQuestion("");
 
-    // Show the question immediately on the right with a pending assistant placeholder on the left
+    // Show the question immediately on the right with a dynamic RAG pipeline placeholder on the left
     const tempId = crypto.randomUUID();
     setChat((prev) => [
       ...prev,
@@ -256,6 +256,10 @@ export default function App() {
         question: q,
         response: {
           status: "pending",
+          stage: "understanding_question",
+          stageLabel: "Understanding Question",
+          stageDetail: "Analyzing query intent & key terms...",
+          stagesDone: [],
           answer: "",
         },
       },
@@ -271,17 +275,78 @@ export default function App() {
 
     await run(async () => {
       try {
-        const r = await api("/chat", {
-          method: "POST",
-          body: JSON.stringify({
-            question: q,
-            document_ids: validSelected,
-            conversation_id: conversation,
-          }),
-        });
-        setConversation(r.conversation_id);
-        setChat((prev) =>
-          prev.map((item) => (item.id === tempId ? { ...item, id: r.id, response: r } : item))
+        await apiStream(
+          "/chat/stream",
+          {
+            method: "POST",
+            body: JSON.stringify({
+              question: q,
+              document_ids: validSelected,
+              conversation_id: conversation,
+            }),
+          },
+          {
+            onStage: (data) => {
+              setChat((prev) =>
+                prev.map((item) => {
+                  if (item.id !== tempId) return item;
+                  const currentDone = item.response?.stagesDone || [];
+                  const newDone =
+                    item.response?.stage && !currentDone.includes(item.response.stage)
+                      ? [...currentDone, item.response.stage]
+                      : currentDone;
+                  return {
+                    ...item,
+                    response: {
+                      ...item.response,
+                      status: "pending",
+                      stage: data.stage,
+                      stageLabel: data.label,
+                      stageDetail: data.detail,
+                      stagesDone: newDone,
+                    },
+                  };
+                })
+              );
+            },
+            onToken: (token) => {
+              setChat((prev) =>
+                prev.map((item) => {
+                  if (item.id !== tempId) return item;
+                  return {
+                    ...item,
+                    response: {
+                      ...item.response,
+                      answer: (item.response.answer || "") + token,
+                    },
+                  };
+                })
+              );
+              chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+            },
+            onComplete: (data) => {
+              setConversation(data.conversation_id);
+              setChat((prev) =>
+                prev.map((item) => (item.id === tempId ? { ...item, id: data.id, response: data } : item))
+              );
+            },
+            onError: (errData) => {
+              setChat((prev) =>
+                prev.map((item) =>
+                  item.id === tempId
+                    ? {
+                        ...item,
+                        response: {
+                          status: "error",
+                          code: errData.code || "ERROR",
+                          answer: errData.message || errData.answer || "The AI service encountered an error. Please try again.",
+                        },
+                      }
+                    : item
+                )
+              );
+            },
+          }
         );
       } catch (err) {
         setChat((prev) =>
@@ -307,7 +372,19 @@ export default function App() {
     if (!item?.question || busy) return;
     setChat((prev) =>
       prev.map((c) =>
-        c.id === item.id ? { ...c, response: { status: "pending", answer: "" } } : c
+        c.id === item.id
+          ? {
+              ...c,
+              response: {
+                status: "pending",
+                stage: "understanding_question",
+                stageLabel: "Understanding Question",
+                stageDetail: "Re-analyzing question...",
+                stagesDone: [],
+                answer: "",
+              },
+            }
+          : c
       )
     );
     const validSelected = selected.filter((id) =>
@@ -315,16 +392,77 @@ export default function App() {
     );
     await run(async () => {
       try {
-        const r = await api("/chat", {
-          method: "POST",
-          body: JSON.stringify({
-            question: item.question,
-            document_ids: validSelected,
-            conversation_id: conversation,
-          }),
-        });
-        setChat((prev) =>
-          prev.map((c) => (c.id === item.id ? { ...c, response: r } : c))
+        await apiStream(
+          "/chat/stream",
+          {
+            method: "POST",
+            body: JSON.stringify({
+              question: item.question,
+              document_ids: validSelected,
+              conversation_id: conversation,
+            }),
+          },
+          {
+            onStage: (data) => {
+              setChat((prev) =>
+                prev.map((c) => {
+                  if (c.id !== item.id) return c;
+                  const currentDone = c.response?.stagesDone || [];
+                  const newDone =
+                    c.response?.stage && !currentDone.includes(c.response.stage)
+                      ? [...currentDone, c.response.stage]
+                      : currentDone;
+                  return {
+                    ...c,
+                    response: {
+                      ...c.response,
+                      status: "pending",
+                      stage: data.stage,
+                      stageLabel: data.label,
+                      stageDetail: data.detail,
+                      stagesDone: newDone,
+                    },
+                  };
+                })
+              );
+            },
+            onToken: (token) => {
+              setChat((prev) =>
+                prev.map((c) => {
+                  if (c.id !== item.id) return c;
+                  return {
+                    ...c,
+                    response: {
+                      ...c.response,
+                      answer: (c.response.answer || "") + token,
+                    },
+                  };
+                })
+              );
+              chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+            },
+            onComplete: (data) => {
+              setChat((prev) =>
+                prev.map((c) => (c.id === item.id ? { ...c, response: data } : c))
+              );
+            },
+            onError: (errData) => {
+              setChat((prev) =>
+                prev.map((c) =>
+                  c.id === item.id
+                    ? {
+                        ...c,
+                        response: {
+                          status: "error",
+                          code: errData.code || "ERROR",
+                          answer: errData.message || errData.answer || "The AI service encountered an error. Please try again.",
+                        },
+                      }
+                    : c
+                )
+              );
+            },
+          }
         );
       } catch (err) {
         setChat((prev) =>
