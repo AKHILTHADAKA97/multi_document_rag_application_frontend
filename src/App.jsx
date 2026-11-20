@@ -213,21 +213,29 @@ export default function App() {
     await run(async () => {
       let successes = 0;
       const failures = [];
+      const newDocIds = [];
       for (const [i, file] of Array.from(files).entries()) {
         setUploadStatus(`Processing ${i + 1}/${files.length}: ${file.name}`);
         const f = new FormData();
         f.append("file", file);
         try {
           const d = await api("/documents", { method: "POST", body: f });
-          if (d.status === "failed") failures.push(`${file.name}: ${d.error}`);
-          else successes++;
+          if (d.status === "failed") {
+            failures.push(`${file.name}: ${d.error}`);
+          } else {
+            successes++;
+            if (d.id) newDocIds.push(d.id);
+          }
         } catch (e) {
           failures.push(`${file.name}: ${e.message}`);
         }
       }
       setUploadStatus("");
-      setNotice(`${successes} file(s) ready. ${failures.length} failed.`);
+      setNotice(`${successes} file(s) permanently stored & ready for questions.`);
       if (failures.length) setError(failures.join(" | "));
+      if (newDocIds.length > 0) {
+        setSelected((prev) => Array.from(new Set([...prev, ...newDocIds])));
+      }
       await Promise.all([loadDocs(), refresh()]);
     });
     setUploadStatus("");
@@ -256,13 +264,18 @@ export default function App() {
       chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, 50);
 
+    // Filter selected against available documents to avoid stale IDs
+    const validSelected = selected.filter((id) =>
+      docs.items.some((d) => d.id === id && d.status === "ready")
+    );
+
     await run(async () => {
       try {
         const r = await api("/chat", {
           method: "POST",
           body: JSON.stringify({
             question: q,
-            document_ids: selected,
+            document_ids: validSelected,
             conversation_id: conversation,
           }),
         });
@@ -297,13 +310,16 @@ export default function App() {
         c.id === item.id ? { ...c, response: { status: "pending", answer: "" } } : c
       )
     );
+    const validSelected = selected.filter((id) =>
+      docs.items.some((d) => d.id === id && d.status === "ready")
+    );
     await run(async () => {
       try {
         const r = await api("/chat", {
           method: "POST",
           body: JSON.stringify({
             question: item.question,
-            document_ids: selected,
+            document_ids: validSelected,
             conversation_id: conversation,
           }),
         });
@@ -993,9 +1009,19 @@ export default function App() {
                     </button>
                   </form>
                   <div className="composer-footnote">
-                    {stats.ready
-                      ? "Answers are synthesized with inline citations from your files."
-                      : "Upload a document to ask a question."}
+                    {stats.ready ? (
+                      <span>
+                        Grounded in{" "}
+                        <strong>
+                          {selected.length === 0
+                            ? `all ${stats.ready} ready document(s)`
+                            : `${selected.length} selected document(s)`}
+                        </strong>{" "}
+                        with permanent storage & inline citations.
+                      </span>
+                    ) : (
+                      "Upload a document to ask a question."
+                    )}
                   </div>
                 </div>
               </div>
