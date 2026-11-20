@@ -4,12 +4,14 @@ const INLINE = /(\*\*[^*]+\*\*|`[^`]+`|\*[^*\n]+\*|\[(?:S\d+|\d+)\]|\[[^\]]+\]\(
 
 function renderInline(text, onCitation, key) {
   if (!text) return null;
+  // Clean up any trailing space before punctuation when preceded by citations (e.g. "[S1] [S2] ." -> "[S1] [S2].")
+  const cleanText = String(text).replace(/(\[(?:S\d+|\d+)\])\s+([.,;:!?])/g, "$1$2");
   const parts = [];
   let last = 0;
   let match;
   INLINE.lastIndex = 0;
-  while ((match = INLINE.exec(text)) !== null) {
-    if (match.index > last) parts.push(text.slice(last, match.index));
+  while ((match = INLINE.exec(cleanText)) !== null) {
+    if (match.index > last) parts.push(cleanText.slice(last, match.index));
     const token = match[0];
     const k = `${key}-${parts.length}`;
     const citeMatch = token.match(/^\[(S?\d+)\]$/);
@@ -22,6 +24,7 @@ function renderInline(text, onCitation, key) {
           className="cite"
           onClick={() => onCitation?.(id)}
           aria-label={`Show source ${id}`}
+          title={`Jump to Source [${id}]`}
         >
           {token}
         </button>,

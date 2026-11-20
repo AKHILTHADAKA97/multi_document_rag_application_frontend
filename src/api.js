@@ -1,8 +1,16 @@
-const API_BASE_URL = (
+let rawBase = (
   import.meta.env.VITE_API_BASE_URL ||
   import.meta.env.VITE_API_URL ||
   ""
 ).replace(/\/+$/, "");
+
+// On Windows, localhost:8000 often resolves to IPv6 [::1] where Docker/WSL listens,
+// resulting in 404s. Normalize localhost:8000 to IPv4 127.0.0.1:8000.
+if (rawBase.includes("localhost:8000")) {
+  rawBase = rawBase.replace("localhost:8000", "127.0.0.1:8000");
+}
+
+const API_BASE_URL = rawBase;
 
 export { API_BASE_URL };
 

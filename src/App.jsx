@@ -128,6 +128,7 @@ export default function App() {
   const [mobileDocsOpen, setMobileDocsOpen] = useState(false);
 
   const chatMessagesScrollRef = useRef(null);
+  const messagesEndRef = useRef(null);
   const chatAttachmentInputRef = useRef(null);
   const fileInputRef = useRef(null);
   const rightFileInputRef = useRef(null);
@@ -136,20 +137,39 @@ export default function App() {
   const scrollToBottom = useCallback((smooth = true) => {
     const el = chatMessagesScrollRef.current;
     if (el) {
-      el.scrollTo({
-        top: el.scrollHeight + 1000,
-        behavior: smooth ? "smooth" : "auto",
-      });
-      requestAnimationFrame(() => {
-        if (chatMessagesScrollRef.current) {
-          chatMessagesScrollRef.current.scrollTop = chatMessagesScrollRef.current.scrollHeight;
-        }
-      });
+      if (!smooth) {
+        el.scrollTop = el.scrollHeight;
+      } else {
+        el.scrollTo({
+          top: el.scrollHeight + 1000,
+          behavior: "smooth",
+        });
+      }
     }
+    if (messagesEndRef.current) {
+      try {
+        messagesEndRef.current.scrollIntoView({
+          behavior: smooth ? "smooth" : "auto",
+          block: "end",
+        });
+      } catch {
+        // fallback
+      }
+    }
+    requestAnimationFrame(() => {
+      if (chatMessagesScrollRef.current) {
+        const c = chatMessagesScrollRef.current;
+        if (c.scrollHeight - c.scrollTop - c.clientHeight > 30) {
+          c.scrollTop = c.scrollHeight;
+        }
+      }
+    });
   }, []);
 
   useEffect(() => {
     scrollToBottom(true);
+    const timer = setTimeout(() => scrollToBottom(true), 120);
+    return () => clearTimeout(timer);
   }, [chat, busy, scrollToBottom]);
 
   // Restore conversation messages from backend on initial mount
@@ -523,7 +543,8 @@ export default function App() {
               setChat((prev) =>
                 prev.map((item) => (item.id === tempId ? { ...item, id: data.id, response: data } : item))
               );
-              scrollToBottom(true);
+              setTimeout(() => scrollToBottom(true), 40);
+              setTimeout(() => scrollToBottom(true), 180);
             },
             onError: (errData) => {
               setChat((prev) =>
@@ -1332,7 +1353,10 @@ export default function App() {
                       item={item}
                       onFeedback={feedback}
                       onRegenerate={regenerate}
-                      onAskSuggestion={(sq) => ask(null, sq)}
+                      onAskSuggestion={(sq) => {
+                        ask(null, sq);
+                        setTimeout(() => scrollToBottom(true), 60);
+                      }}
                     />
                   ))}
 
@@ -1348,6 +1372,13 @@ export default function App() {
                       </p>
                     </div>
                   )}
+
+                  {/* Guaranteed Bottom Scroll Sentinel */}
+                  <div
+                    ref={messagesEndRef}
+                    className="chat-messages-bottom-sentinel"
+                    style={{ height: 28, flexShrink: 0 }}
+                  />
                 </div>
 
                 {/* Bottom Input Composer */}
