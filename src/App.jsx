@@ -1622,11 +1622,15 @@ export default function App() {
           {/* TAB: PIPELINE (VISUAL N8N-STYLE RAG GRAPH) */}
           {tab === "Pipeline" && (
             <WorkflowPipeline
-              query={question || (chat.length ? chat[chat.length - 1].question : "What is the leave allowance?")}
+              query={
+                question ||
+                (chat.length ? chat[chat.length - 1].question : "LSTM")
+              }
               activeModel={settings?.model || config?.model || "openai/gpt-oss-120b"}
               topK={settings?.top_k || 5}
               minSimilarity={settings?.min_similarity || 0.25}
               readyDocs={docs.items.filter((d) => d.status === "ready").length || 1}
+              lastExchange={chat.length ? chat[chat.length - 1] : null}
             />
           )}
 
